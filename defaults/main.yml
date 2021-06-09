@@ -1,0 +1,18 @@
+---
+############################################################
+# Default settings used by nar_solidfire_sds_uninstall role:
+############################################################
+
+# The version of the API we're using for the current release of SolidFire eSDS
+# DO NOT change this unless you know what you're doing, or was told to modify
+# it by NetApp SolidFire support.
+sf_api_version: 12.2
+#
+# Whether to validate SSL/TLS certificates (yes, we should)
+sf_validate_certs: True
+#
+# Whether to use the on-node proxy settings (applies to target node)
+sf_use_proxy: False
+#
+# Set below varible to Uninstall nodes in active cluster
+sf_allow_uninstall_active_cluster: False

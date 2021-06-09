@@ -1,0 +1,56 @@
+---
+- set_fact:
+    sf_host_ssh_addr: "{{ hostvars[inventory_hostname]['ansible_env'].SSH_CONNECTION.split(' ')[2] }}"
+
+- name: check cluster name and node ID
+  delegate_to: localhost
+  run_once: True
+  block:
+    - set_fact:
+        cluster_names: []
+        nodes_already_uninstalled: []
+        nodes_to_uninstall: []
+        nodes_cannot_uninstall: []
+
+    - name: Collect node info
+      include_tasks: collect-node-info.yml
+      vars:
+        node_ip: "{{ hostvars[item].sf_host_ssh_addr }}"
+      with_items:  "{{ ansible_play_hosts }}"
+
+    - name: Ensure we fail if multiple cluster names are found
+      fail:
+        msg: "Nodes are configured for different clusters"
+      when: cluster_names | length > 1
+
+    - name: Nodes already uninstalled
+      debug:
+        var: nodes_already_uninstalled
+
+    - name: Nodes to be uninstalled
+      debug:
+        var: nodes_to_uninstall
+
+    - name: Nodes not to be uninstalled
+      debug:
+        var: nodes_cannot_uninstall
+
+    - name: Ensure we did not make mistakes in collect node info
+      assert:
+        that:
+          - nodes_to_uninstall|intersect(nodes_cannot_uninstall)|length == 0
+          - nodes_to_uninstall|intersect(nodes_already_uninstalled)|length == 0
+          - nodes_cannot_uninstall|intersect(nodes_already_uninstalled)|length == 0
+          - (nodes_already_uninstalled|length + nodes_to_uninstall|length + nodes_cannot_uninstall|length) == ansible_play_hosts|length
+        fail_msg: "Error: The two lists should be mutually exclusive. Must be bugs in code!"
+
+    - name: Load Uninstall tasks
+      include_tasks: uninstall.yml
+      vars:
+        node_ip: "{{ item }}"
+      with_items: "{{ nodes_to_uninstall }}"
+
+    - name: Ensure we fail if active cluster is preventing uninstallation
+      fail:
+        msg: "Nodes found in active cluster: {{ nodes_cannot_uninstall }}, uninstallation may cause data loss. If you're sure it's OK to uninstall them, please set variable sf_allow_uninstall_active_cluster to True then try again."
+      when: nodes_cannot_uninstall|length > 0

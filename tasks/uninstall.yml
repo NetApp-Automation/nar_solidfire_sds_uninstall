@@ -1,0 +1,54 @@
+---
+- name: stop SF service
+  delegate_to: "{{ node_ip }}"
+  block:
+    - name: "Stop solidfire service on node {{ node_ip }}"
+      systemd:
+        name: solidfire
+        state: stopped
+      register: stop_sf
+
+  rescue:
+    - name: "Ensure we fail if we experienced unexpected error on node {{ node_ip }}"
+      fail:
+        msg: "{{ stop_sf.msg }}"
+      when:
+        - stop_sf is defined and stop_sf.msg is defined
+        - stop_sf.msg is not search('Could not find the requested service solidfire')
+        - stop_sf.msg is not search ('Service is in unknown state')
+
+- pause:
+    prompt: "Wait for resource to be released"
+    seconds: 60
+  delegate_to: localhost
+
+- name: Remove package
+  delegate_to: "{{ node_ip }}"
+  block:
+    - name: "Remove SolidFire-Element package on node {{ node_ip }}"
+      package:
+        name: solidfire-element
+        state: absent
+      become: yes
+
+    - name: "Check to see if the SolidFire-Element config file exists on node {{ node_ip }}"
+      stat:
+        path: /opt/sf/sf_sds_config.yaml.rpmsave
+      register: sf_conf_file
+
+    - name: "Define path to backup SolidFire-Element conf file on node {{ node_ip }}"
+      set_fact:
+        sf_conf_backup_path: "/tmp/sf_sds_config.yaml.rpmsave.{{ lookup('pipe', 'date +%Y%m%d-%H%M') }}"
+
+    - name: "Save backup copy of SolidFire-Element conf file to {{ sf_conf_backup_path }}"
+      copy:
+        src: /opt/sf/sf_sds_config.yaml.rpmsave
+        dest: "{{ sf_conf_backup_path }}"
+        remote_src: yes
+      when: sf_conf_file.stat.exists
+
+    - name: "Remove SolidFire-Element configuration directory /opt/sf on node {{ node_ip }}"
+      file:
+        path: /opt/sf
+        state: absent
+      become: yes
