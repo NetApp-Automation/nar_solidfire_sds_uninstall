@@ -2,39 +2,46 @@
 - name: Check Solidfire service on the node
   delegate_to: "{{ node_ip }}"
   block:
-    - name: "Check whether the config file exists on node {{ node_ip }}"
+    - name: "Check whether the config file path exists on node {{ node_ip }}"
       stat:
         path: /opt/sf
       register: cfg_file
 
-    - name: "Add node {{ node_ip }} to already-uninstalled list if config file is not found"
+    - name: "Add node {{ node_ip }} to already-uninstalled list if config file path is not found"
       set_fact:
         nodes_already_uninstalled: "{{ nodes_already_uninstalled + [ node_ip ] }}"
-      when: cfg_file is defined and cfg_file.stat is defined and not cfg_file.stat.exists
+      when: not cfg_file.stat.exists
 
     - name: Check solidfire service
+      when: cfg_file.stat.exists
       block:
-        - name: "Check whether the Solidfire service is up on node {{ node_ip }} when the config file exists"
+        - name: "Check whether Solidfire service is up on node {{ node_ip }} when config file path exists"
           shell: systemctl list-units --type=service | grep solidfire.service
-          when: cfg_file is defined and cfg_file.stat.exists
           register: sf_status
       rescue:
         - debug:
             msg: "Solidfire.service not found on node {{ node_ip }}"
           when: sf_status.rc != 0
 
-    - name: "Add node {{ node_ip }} to uninstall list if config file exists but Solidfire service is not up"
+    - name: "Add node {{ node_ip }} to uninstall list if config file path exists but Solidfire service is not up"
       set_fact:
         nodes_to_uninstall: "{{ nodes_to_uninstall + [node_ip] }}"
-      when:
-        - cfg_file is defined and cfg_file.stat is defined and cfg_file.stat.exists
-        - sf_status is undefined or sf_status.stdout is undefined or sf_status.stdout is not search('loaded active exited')
+      when: >
+        cfg_file.stat.exists and
+        (sf_status is undefined or
+         sf_status.stdout is undefined or
+         sf_status.stdout is not search('loaded') or
+         sf_status.stdout is not search('active') or
+         sf_status.stdout is not search('exited'))
 
 - name: Get cluster config info from node
   delegate_to: localhost
-  when: >
-    sf_status is defined and sf_status.stdout is defined and
-    sf_status.stdout is search('loaded active exited')
+  when:
+    - sf_status is defined
+    - sf_status.stdout is defined
+    - sf_status.stdout is search('loaded')
+    - sf_status.stdout is search('active')
+    - sf_status.stdout is search('exited')
   block:
     - name: "Get cluster config details from node {{ node_ip }} if Solidfire service is up"
       uri:
@@ -54,7 +61,7 @@
         - response.json.result.cluster.cluster != ""
         - response.json.result.cluster.cluster is not in cluster_names
 
-    - name: "Add node {{ node_ip }} to cannot-uninstall list if its nodeID > 0 and uninstalling active cluster is not allowed"
+    - name: "Add node {{ node_ip }} to cannot-uninstall list if it's in cluster and force-uninstall is not allowed"
       set_fact:
         nodes_cannot_uninstall: "{{ nodes_cannot_uninstall + [node_ip] }}"
       when:
@@ -62,7 +69,7 @@
         - response.json.result.cluster.nodeID > 0
         - response.json.result.cluster.nodeID is not in nodes_cannot_uninstall
 
-    - name: "Add node {{ node_ip }} to uninstall list if its nodeID is 0 or uninstall active cluster is allowed"
+    - name: "Add node {{ node_ip }} to uninstall list if it's not in cluster or force-uninstall is allowed"
       set_fact:
         nodes_to_uninstall: "{{ nodes_to_uninstall + [node_ip] }}"
       when:
@@ -70,13 +77,19 @@
         - response.json.result.cluster.nodeID == 0 or sf_allow_uninstall_active_cluster
 
   rescue:
-    - name: Ensure we fail if node API returned unexpected error
+    - name: Ensure we fail if a node is in cluster but cluster login credential is not provided
+      fail:
+        msg: "Missing sf_cluster_admin_username/sf_cluster_admin_passwd in the inventory file"
+      when: response.status == 401
+
+    - name: Ensure we fail when node API call failed and force-uninstall is not allowed
       fail:
         msg: "{{ response }}"
-      when: >
-        not (response.status == -1 and response.msg is defined and response.msg is search('Connection refused'))
+      when: not sf_allow_uninstall_active_cluster
 
-    - name: "Add node {{ node_ip }} to uninstall list when the node API failed (Solidfire service went down)"
+    - name: "Ignore API error and add node {{ node_ip }} to uninstall list when force-uninstall is allowed"
       set_fact:
         nodes_to_uninstall: "{{ nodes_to_uninstall + [node_ip] }}"
-      when: node_ip not in nodes_to_uninstall
+      when:
+        - node_ip not in nodes_to_uninstall
+        - sf_allow_uninstall_active_cluster
