@@ -20,7 +20,7 @@
 
     - name: Ensure we fail if multiple cluster names are found
       fail:
-        msg: "Nodes are configured for different clusters"
+        msg: "Nodes are configured for different clusters: {{ cluster_names }}"
       when: cluster_names | length > 1
 
     - name: Nodes already uninstalled
@@ -31,11 +31,11 @@
       debug:
         var: nodes_to_uninstall
 
-    - name: Nodes not to be uninstalled
+    - name: Nodes cannot be uninstalled
       debug:
         var: nodes_cannot_uninstall
 
-    - name: Ensure we did not make mistakes in collect node info
+    - name: Ensure we did not make mistakes in collecting node info
       assert:
         that:
           - nodes_to_uninstall|intersect(nodes_cannot_uninstall)|length == 0
@@ -52,5 +52,9 @@
 
     - name: Ensure we fail if active cluster is preventing uninstallation
       fail:
-        msg: "Nodes found in active cluster: {{ nodes_cannot_uninstall }}, uninstallation may cause data loss. If you're sure it's OK to uninstall them, please set variable sf_allow_uninstall_active_cluster to True then try again."
+        msg: >-
+          Nodes found in active cluster: {{ nodes_cannot_uninstall }}.
+          Uninstallation may cause data loss.
+          If you're sure it's OK to force-uninstall,
+          then set sf_allow_uninstall_active_cluster to true and try again.
       when: nodes_cannot_uninstall|length > 0

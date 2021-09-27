@@ -17,8 +17,9 @@
         - stop_sf.msg is not search('Could not find the requested service solidfire')
         - stop_sf.msg is not search ('Service is in unknown state')
 
-- pause:
-    prompt: "Wait for resource to be released"
+- name: "Wait for resource to be released from node {{ node_ip }} if Solidfire service is successfully stopped"
+  when: stop_sf is defined and (stop_sf.msg is undefined or stop_sf.msg|length == 0)
+  pause:
     seconds: 60
   delegate_to: localhost
 
