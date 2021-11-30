@@ -1,6 +1,7 @@
 ---
 - name: stop SF service
   delegate_to: "{{ node_ip }}"
+  become: True
   block:
     - name: "Stop solidfire service on node {{ node_ip }}"
       systemd:

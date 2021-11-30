@@ -15,7 +15,10 @@ Requirements
 ------------
 * This role requires the target systems use RHEL 7.6 or later.  Additionally, the target system is required to have eSDS installed.
 
-* This role requires Python version 3.6 or later and Ansible version 2.10 or later.
+* This role requires Python version 3.6 or later and Ansible version 2.10 or later installed on the controller.
+
+* This role requires root or superuser privilege to run.
+
 
 Role Variables
 --------------
@@ -25,7 +28,7 @@ Role Variables
 |-----------------------------------|----------|---------|---------------------------------------------|----------------------------|
 | sf_cluster_admin_passwd           | no       | ""      | The password of the Cluster Administrator   | Needed for nodes in cluster|
 | sf_cluster_admin_username         | no       | ""      | The username of the Cluster Administrator   | Needed for nodes in cluster|
-| sf_validate_certs                 | no       | True    | Check SSL/TLS certificates                  |                            |
+| sf_validate_certs                 | no       | False   | Whether to validate SSL/TLS certificates    |                            |
 | sf_use_proxy                      | no       | False   | Use proxy config. See note [1] below        |                            |
 | sf_api_version                    | no       | 12.2    | The version of the SolidFire eSDS API to    |                            |
 |                                   |          |         | use, should not be modified!                |                            |
@@ -48,11 +51,27 @@ Example Playbook
 
 ```
   - name: Uninstall SolidFire Enterprise SDS
-    hosts: all
+    remote_user: <root or superuser ID>
     gather_facts: True
-
+    hosts: all
     roles:
       - role: nar_solidfire_sds_uninstall
+```
+
+Example Inventory
+-----------------
+```
+all:
+  hosts:
+    hosts1:
+      ansible_host: <host1 IP>
+    host2:
+      ansible_host: <host2 IP>
+  vars:
+    ansible_python_interpreter: <full path on target hosts to a python interpreter, such as /usr/libexec/platform-python>
+    become: True
+    ansible_password: <login user password> # prefer vault key
+    ansible_become_pass: <privilege escalation password> # or --ask-become-pass on command line to prompt for input
 ```
 
 License

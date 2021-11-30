@@ -13,6 +13,7 @@
       when: not cfg_file.stat.exists
 
     - name: Check solidfire service
+      become: True
       when: cfg_file.stat.exists
       block:
         - name: "Check whether Solidfire service is up on node {{ node_ip }} when config file path exists"
@@ -20,7 +21,7 @@
           register: sf_status
       rescue:
         - debug:
-            msg: "Solidfire.service not found on node {{ node_ip }}"
+            msg: "Solidfire service not found on node {{ node_ip }} which is OK, continue"
           when: sf_status.rc != 0
 
     - name: "Add node {{ node_ip }} to uninstall list if config file path exists but Solidfire service is not up"
