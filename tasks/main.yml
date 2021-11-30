@@ -1,4 +1,9 @@
 ---
+- name: Load version check tasks
+  include_role:
+    name: nar_solidfire_sds_compliance
+    tasks_from: check_ansible_version.yml
+
 - set_fact:
     sf_host_ssh_addr: "{{ hostvars[inventory_hostname]['ansible_env'].SSH_CONNECTION.split(' ')[2] }}"
 
